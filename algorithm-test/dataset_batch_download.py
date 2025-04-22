@@ -13,7 +13,7 @@ os.makedirs(save_dir, exist_ok=True)
 start_time = datetime(2025, 3, 21, 0)
 
 # How many training examples? Warning: Each pair is time-intensive
-num_pairs = 10
+num_pairs = 64
 area = [50, -125, 24, -67]
 client = cdsapi.Client()
 

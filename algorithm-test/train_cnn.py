@@ -9,10 +9,10 @@ import cartopy.feature as cfeature
 
 # --- Config ---
 DATA_DIR = "algorithm-test"
-NUM_SAMPLES = 10
+NUM_SAMPLES = 64
 TRAIN_SPLIT_PERCENT = 0.7
 TRAIN_SPLIT = int(TRAIN_SPLIT_PERCENT * NUM_SAMPLES)
-BATCH_SIZE = 2
+BATCH_SIZE = 6
 EPOCHS = 500
 
 # --- Utility: Trim to even dimensions ---
