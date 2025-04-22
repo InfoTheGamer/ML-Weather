@@ -9,10 +9,10 @@ import cartopy.feature as cfeature
 
 # --- Config ---
 DATA_DIR = "algorithm-test"
-NUM_SAMPLES = 64
+NUM_SAMPLES = 10
 TRAIN_SPLIT_PERCENT = 0.7
 TRAIN_SPLIT = int(TRAIN_SPLIT_PERCENT * NUM_SAMPLES)
-BATCH_SIZE = 6
+BATCH_SIZE = 2
 EPOCHS = 500
 
 # --- Utility: Trim to even dimensions ---
@@ -27,11 +27,8 @@ for i in range(NUM_SAMPLES):
         var0 = ds.variables["pressure_T"][:]
         var1 = ds.variables["pressure_T_plus_1"][:]
 
-        # Convert masked arrays to regular arrays with NaNs
         data0 = np.ma.filled(var0, np.nan)
         data1 = np.ma.filled(var1, np.nan)
-
-        print("Max after mask handling:", np.nanmax(data0), np.nanmax(data1))
 
         p0 = trim_even(data0)
         p1 = trim_even(data1)
@@ -45,26 +42,18 @@ for i in range(NUM_SAMPLES):
 X = np.array(X)
 Y = np.array(Y)
 
-print("Final max check:", X.max(), Y.max())
-
-
-# Optionally replace NaNs if you want to normalize safely:
+# Replace any lingering NaNs
 X = np.nan_to_num(X, nan=np.nanmin(X))
 Y = np.nan_to_num(Y, nan=np.nanmin(Y))
 
-# Trimmed data shape
-print(f"Trimmed X shape: {X.shape}, Trimmed Y shape: {Y.shape}")
-
 # --- Create lat/lon grid for the trimmed data ---
-lat_trimmed = np.linspace(24, 50, X.shape[1])  # Adjust based on the number of rows
-lon_trimmed = np.linspace(-130, -65, X.shape[2])  # Adjust based on the number of columns
+lat_trimmed = np.linspace(24, 50, X.shape[1])
+lon_trimmed = np.linspace(-130, -65, X.shape[2])
 Lon_trimmed, Lat_trimmed = np.meshgrid(lon_trimmed, lat_trimmed)
 
 # --- Normalize (min-max to [0, 1]) ---
 min_val_X, max_val_X = X.min(), X.max()
 min_val_Y, max_val_Y = Y.min(), Y.max()
-print(f"Y min/max: {min_val_Y}/{max_val_Y}")
-print(f"X min/max: {min_val_X}/{max_val_X}")
 
 X = (X - min_val_X) / (max_val_X - min_val_X)
 Y = (Y - min_val_Y) / (max_val_Y - min_val_Y)
@@ -101,8 +90,6 @@ flat_pred = Y_pred.flatten()
 
 mse = mean_squared_error(flat_true, flat_pred)
 mae = mean_absolute_error(flat_true, flat_pred)
-
-# Binarized metrics (threshold = 0.05 in normalized space)
 threshold = 0.05
 y_true_bin = np.abs(flat_true - flat_pred) <= threshold
 y_pred_bin = np.ones_like(y_true_bin)
@@ -118,48 +105,26 @@ print(f"Precision (±{threshold} norm): {precision:.3f}")
 print(f"Recall    (±{threshold} norm): {recall:.3f}")
 print(f"F1 Score  (±{threshold} norm): {f1:.3f}")
 
-# Optional: Save model
-# model.save("cnn_surface_pressure_model.h5")
-
-
-################
-# Me trying to visualize the delta error between test and predicted errors
-# Current issues (as of 12am Tuesday):
-# 1. Graphs are not scaling properly, they are NOT in the right location.
-# 2. Y_pred (the predicted pressure) is COMPLETELY wrong. idk what 1e37 Pa is. that's dead pressure. what is going on with that, need help
-
-
-# Select test sample
+# --- Visualization: True vs Predicted ---
 sample_idx = 0
 x_sample = X_test[sample_idx:sample_idx+1]
 y_true_sample = Y_test[sample_idx]
 y_pred_sample = Y_pred[sample_idx]
 
-# Create mask from input (assume valid values < 1e5 Pa before normalization)
 valid_mask = (x_sample[0, :, :, 0] * (max_val_X - min_val_X) + min_val_X) < 1e5
-
-# Denormalize
 y_true_denorm = y_true_sample[:, :, 0] * (max_val_Y - min_val_Y) + min_val_Y
 y_pred_denorm = y_pred_sample[:, :, 0] * (max_val_Y - min_val_Y) + min_val_Y
-
-# Apply the mask
 y_true_denorm[~valid_mask] = np.nan
 y_pred_denorm[~valid_mask] = np.nan
 error = np.abs(y_true_denorm - y_pred_denorm)
 
-# Plot
 fig, axs = plt.subplots(1, 3, figsize=(15, 5), subplot_kw={'projection': ccrs.PlateCarree()})
 titles = ["True Pressure (Pa)", "Predicted Pressure (Pa)", "Absolute Error (Pa)"]
 data = [y_true_denorm, y_pred_denorm, error]
 
-# Generate lat/lon grid for plotting
-lon = np.linspace(-130, -65, y_true_denorm.shape[1])
-lat = np.linspace(24, 50, y_true_denorm.shape[0])
-Lon, Lat = np.meshgrid(lon, lat)
-
 for ax, title, dat in zip(axs, titles, data):
-    dat = np.flipud(dat)  # flip vertically for correct orientation
-    cont = ax.contourf(Lon_trimmed, Lat_trimmed, dat, cmap="viridis", transform=ccrs.PlateCarree())
+    dat = np.flipud(dat)
+    cont = ax.contourf(Lon_trimmed, Lat_trimmed, dat, cmap="viridis" if title != "Absolute Error (Pa)" else "coolwarm", transform=ccrs.PlateCarree())
     ax.set_title(title)
     ax.set_extent([-130, -65, 24, 50], crs=ccrs.PlateCarree())
     ax.coastlines()
