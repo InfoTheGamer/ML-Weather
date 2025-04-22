@@ -10,14 +10,11 @@ request = {
     "time": ["00:00"],
     "data_format": "netcdf",
     "download_format": "unarchived",
-    "area": [50, -124, 24, -67]
+    "area": [50, -125, 24, -67]
 }
 
-client = cdsapi.Client()
-client.retrieve(dataset, request).download()
-
 # Create the directory if it doesn't exist
-folder_path = "austin-test"
+folder_path = "algorithm-test"
 
 # File path with the same name as the dataset (ERA5)
 file_name = f"{dataset.replace('-', '_')}_test.nc"  # Create a file name based on the request
