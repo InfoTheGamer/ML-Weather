@@ -20,6 +20,9 @@ def trim_even(arr):
     h, w = arr.shape
     return arr[:h - h % 2, :w - w % 2]
 
+def pad_even(arr):
+    return np.pad(arr, ((0, h%2), (0, w%2)), 'constant')
+
 # --- Load + Preprocess Data ---
 X, Y = [], []
 for i in range(NUM_SAMPLES):
