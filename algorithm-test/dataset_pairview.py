@@ -14,6 +14,10 @@ def plot_pair_with_cartopy(file_path):
         lat = ds.variables["latitude"][:]  # Latitude
         lon = ds.variables["longitude"][:]  # Longitude
         pressure_T = ds.variables["pressure_T"][:]  # Pressure at time t
+
+        # Testing/debug
+        print(np.amax(pressure_T))
+
         pressure_T_plus_1 = ds.variables["pressure_T_plus_1"][:]  # Pressure at time t+1
 
     # Create meshgrid for lat and lon
@@ -54,6 +58,12 @@ def plot_pair_with_cartopy(file_path):
     plt.tight_layout()
     plt.show()
 
+    # Testing/debug
+    print(np.amax(pressure_T))
+    print(np.amax(pressure_T_plus_1))
+
 # Test the plotting function with a specific file
-file_path = "algorithm-test/pair_000.nc"  # Update this to your file path
+file_path = "algorithm-test/pair_008.nc"  # Update this to your file path
 plot_pair_with_cartopy(file_path)
+
+
