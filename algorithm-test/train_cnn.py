@@ -13,7 +13,7 @@ NUM_SAMPLES = 10
 TRAIN_SPLIT_PERCENT = 0.7
 TRAIN_SPLIT = int(TRAIN_SPLIT_PERCENT * NUM_SAMPLES)
 BATCH_SIZE = 2
-EPOCHS = 500
+EPOCHS = 100
 
 # --- Utility: Trim to even dimensions ---
 def trim_even(arr):

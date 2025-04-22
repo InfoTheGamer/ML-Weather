@@ -116,9 +116,9 @@ def dataset_batch_download(start_time, num_pairs, area, save_dir, dataset="reana
 # === Main execution ===
 if __name__ == "__main__":
     dataset_batch_download(
-        start_time=datetime(2025, 3, 21, 0),
-        num_pairs=1000,
+        start_time=datetime(2025, 1, 1, 0),
+        num_pairs=512,
         area=[50, -125, 24, -67],
-        save_dir="algorithm-test",
-        max_threads=5
+        save_dir="512-data",
+        max_threads=8
     )

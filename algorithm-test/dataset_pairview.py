@@ -63,7 +63,7 @@ def plot_pair_with_cartopy(file_path):
     print(np.amax(pressure_T_plus_1))
 
 # Test the plotting function with a specific file
-file_path = "algorithm-test/pair_008.nc"  # Update this to your file path
+file_path = "1k-data/pair_008.nc"  # Update this to your file path
 plot_pair_with_cartopy(file_path)
 
 
