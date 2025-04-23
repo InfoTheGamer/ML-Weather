@@ -14,6 +14,7 @@ def plot_pair_with_cartopy(file_path):
         lat = ds.variables["latitude"][:]  # Latitude
         lon = ds.variables["longitude"][:]  # Longitude
         pressure_T = ds.variables["pressure_T"][:]  # Pressure at time t
+        print(pressure_T.shape)
 
         # Testing/debug
         print(np.amax(pressure_T))
@@ -63,7 +64,7 @@ def plot_pair_with_cartopy(file_path):
     print(np.amax(pressure_T_plus_1))
 
 # Test the plotting function with a specific file
-file_path = "1k-data/pair_008.nc"  # Update this to your file path
+file_path = "512-data/pair_412.nc"  # Update this to your file path
 plot_pair_with_cartopy(file_path)
 
 
