@@ -5,6 +5,7 @@ import netCDF4 as nc
 import numpy as np
 from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import random
 import time
 
 def download_and_extract_nc(client, dt, base_name, save_dir, area, dataset="reanalysis-era5-land", retries=3):
@@ -41,15 +42,14 @@ def download_and_extract_nc(client, dt, base_name, save_dir, area, dataset="rean
                 return pressure, lat, lon
         except Exception as e:
             print(f"⚠️ Attempt {attempt} failed for {base_name}: {e}")
-            time.sleep(5 * attempt)  # exponential backoff
+            time.sleep(5 * attempt)
         finally:
             if os.path.exists(tmp_zip_path):
                 os.remove(tmp_zip_path)
     raise RuntimeError(f"All attempts failed for {base_name}.")
 
-def download_pair(i, start_time, area, save_dir, dataset):
+def download_pair(i, t0, area, save_dir, dataset):
     client = cdsapi.Client()
-    t0 = start_time + timedelta(hours=i)
     t1 = t0 + timedelta(hours=1)
 
     print(f"📥 Starting pair {i}: {t0} -> {t1}")
@@ -83,22 +83,35 @@ def download_pair(i, start_time, area, save_dir, dataset):
         return False
 
     finally:
-        # Clean up temp files
         for name in [f"tmp0_{i}", f"tmp1_{i}"]:
             for ext in [".zip", ".nc"]:
                 path = os.path.join(save_dir, name + ext)
                 if os.path.exists(path):
                     os.remove(path)
 
-def dataset_batch_download(start_time, num_pairs, area, save_dir, dataset="reanalysis-era5-land", max_threads=5):
+def dataset_batch_download(start_time, end_time, num_pairs, area, save_dir, dataset="reanalysis-era5-land", max_threads=5):
     os.makedirs(save_dir, exist_ok=True)
 
-    print(f"🚀 Starting batch download: {num_pairs} pairs using {max_threads} threads.")
+    all_possible_starts = []
+    current = start_time
+    while current + timedelta(hours=1) <= end_time:
+        all_possible_starts.append(current)
+        current += timedelta(hours=1)
+
+    if num_pairs > len(all_possible_starts):
+        raise ValueError("Requested more pairs than available time intervals.")
+
+    selected_times = random.sample(all_possible_starts, num_pairs)
+
+    print(f"🚀 Starting batch download: {num_pairs} random pairs using {max_threads} threads.")
     success_count = 0
     fail_count = 0
 
     with ThreadPoolExecutor(max_workers=max_threads) as executor:
-        futures = {executor.submit(download_pair, i, start_time, area, save_dir, dataset): i for i in range(num_pairs)}
+        futures = {
+            executor.submit(download_pair, i, t0, area, save_dir, dataset): i
+            for i, t0 in enumerate(selected_times)
+        }
 
         for future in as_completed(futures):
             i = futures[future]
@@ -116,7 +129,8 @@ def dataset_batch_download(start_time, num_pairs, area, save_dir, dataset="reana
 # === Main execution ===
 if __name__ == "__main__":
     dataset_batch_download(
-        start_time=datetime(2025, 1, 1, 0),
+        start_time=datetime(2024, 6, 1, 0),
+        end_time=datetime(2024, 11, 30, 23),
         num_pairs=512,
         area=[50, -125, 24, -67],
         save_dir="512-data",
