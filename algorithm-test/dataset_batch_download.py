@@ -3,6 +3,7 @@ import os
 import zipfile
 import netCDF4 as nc
 import numpy as np
+import calendar
 from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import random
@@ -94,14 +95,48 @@ def dataset_batch_download(start_time, end_time, num_pairs, area, save_dir, data
 
     all_possible_starts = []
     current = start_time
-    while current + timedelta(hours=1) <= end_time:
-        all_possible_starts.append(current)
-        current += timedelta(hours=1)
+    select = 512/(end_time.month - start_time.month)
+    randomTimes = []
+    for i in range(start_time.month, end_time.month):
+        x = calendar.monthrange(start_time.year,i)
+        days = []
+        hours = []
+        
+        for d in range(int(select)):
+            s = random.randrange(x[1])
+            days.append(s)
+        days.sort()
+        prevDay = 0
+        temp = 0
+        numofDays = []
+        for d in range(len(days)):
+            if prevDay == days[d]:
+                temp += 1
+            else:
+                if d + 1 < len(days):
+                    prevDay = days[d+1]
+                numofDays.append(temp)
+                temp = 1
+        if temp != 0:
+            numofDays.append(temp)
+            temp = 0
+        for n in numofDays:
+            h = random.sample(range(0,23),n)
+            hours = hours + h
+        for notI in range(len(hours)):
+            all_possible_starts.append(datetime(2024,i,days[notI]+1,hours[notI]))
+ 
+        
+            
+        
+    #while current + timedelta(hours=1) <= end_time:
+    #    all_possible_starts.append(current)
+    #    current += timedelta(hours=1)
 
-    if num_pairs > len(all_possible_starts):
-        raise ValueError("Requested more pairs than available time intervals.")
+    #if num_pairs > len(all_possible_starts):
+    #    raise ValueError("Requested more pairs than available time intervals.")
 
-    selected_times = random.sample(all_possible_starts, num_pairs)
+    selected_times = all_possible_starts
 
     print(f"🚀 Starting batch download: {num_pairs} random pairs using {max_threads} threads.")
     success_count = 0
