@@ -4,19 +4,19 @@ import netCDF4 as nc
 import matplotlib.pyplot as plt
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
-from sklearn.metrics import mean_squared_error, mean_absolute_error, precision_score, recall_score, f1_score, mean_squared_log_error, r2_score
+from sklearn.metrics import mean_squared_error, mean_absolute_error, precision_score, recall_score, f1_score, r2_score, root_mean_squared_error, root_mean_squared_log_error
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import TensorDataset, DataLoader
 
 # --- Config ---
-DATA_DIR = "512-data"
-NUM_SAMPLES = 512
+DATA_DIR = "2048-data"
+NUM_SAMPLES = 2048
 TRAIN_SPLIT_PERCENT = 0.7
 TRAIN_SPLIT = int(TRAIN_SPLIT_PERCENT * NUM_SAMPLES)
-BATCH_SIZE = 32
-EPOCHS = 100
+BATCH_SIZE = 64
+EPOCHS = 256
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # --- Utility: Pad to divisible dimensions ---
@@ -134,7 +134,7 @@ class UNet(nn.Module):
         return self.final(d1)
 
 model = UNet().to(device)
-optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=1e-5)
+optimizer = torch.optim.Adam(model.parameters(), lr=1e-4, weight_decay=1e-5)
 criterion = nn.MSELoss()
 
 # --- Training Loop ---
@@ -149,7 +149,7 @@ for epoch in range(EPOCHS):
         loss.backward()
         optimizer.step()
         running_loss += loss.item()
-    print(f"Epoch {epoch+1}/{EPOCHS} - Loss: {running_loss/len(train_dl):.4f}")
+    print(f"Epoch {epoch+1}/{EPOCHS} - Loss: {running_loss/len(train_dl):.7f}")
 
 # --- Predict ---
 model.eval()
@@ -187,13 +187,15 @@ threshold = 0.05
 y_true_bin = np.abs(flat_true - flat_pred) <= threshold
 y_pred_bin = np.ones_like(y_true_bin)
 
+print("Y_true_bin shape: ", y_true_bin.shape)
+print("Y_pred_bin shape: ", y_pred_bin.shape)
+
 precision = precision_score(y_true_bin, y_pred_bin)
 recall = recall_score(y_true_bin, y_pred_bin)
 f1 = f1_score(y_true_bin, y_pred_bin)
-
-rmse = mean_squared_error(y_true_bin, y_pred_bin, squared=False)
-rmsle = mean_squared_log_error(y_true_bin, y_pred_bin, squared=False)
-r2 = r2_score(y_true_bin, y_pred_bin)
+rmse = root_mean_squared_error(y_true_bin, y_pred_bin)
+rmsle = root_mean_squared_log_error(y_true_bin, y_pred_bin)
+r2 = r2_score(flat_true, flat_pred)
 
 print("\n🔍 Evaluation Metrics:")
 print(f"MSE: {mse:.4f}")
@@ -204,9 +206,6 @@ print(f"R2: {r2:.4f}")
 print(f"Precision (±{threshold} norm): {precision:.3f}")
 print(f"Recall    (±{threshold} norm): {recall:.3f}")
 print(f"F1 Score  (±{threshold} norm): {f1:.3f}")
-
-
-
 
 
 # --- Visualization of Results ---
