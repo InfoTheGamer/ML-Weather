@@ -4,7 +4,7 @@ import netCDF4 as nc
 import matplotlib.pyplot as plt
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
-from sklearn.metrics import mean_squared_error, mean_absolute_error, precision_score, recall_score, f1_score
+from sklearn.metrics import mean_squared_error, mean_absolute_error, precision_score, recall_score, f1_score, mean_squared_log_error, r2_score
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -191,12 +191,20 @@ precision = precision_score(y_true_bin, y_pred_bin)
 recall = recall_score(y_true_bin, y_pred_bin)
 f1 = f1_score(y_true_bin, y_pred_bin)
 
+rmse = mean_squared_error(y_true_bin, y_pred_bin, squared=False)
+rmsle = mean_squared_log_error(y_true_bin, y_pred_bin, squared=False)
+r2 = r2_score(y_true_bin, y_pred_bin)
+
 print("\n🔍 Evaluation Metrics:")
 print(f"MSE: {mse:.4f}")
 print(f"MAE: {mae:.4f}")
+print(f"RMSE: {rmse:.4f}")
+print(f"RMSLE: {rmsle:.4f}")
+print(f"R2: {r2:.4f}")
 print(f"Precision (±{threshold} norm): {precision:.3f}")
 print(f"Recall    (±{threshold} norm): {recall:.3f}")
 print(f"F1 Score  (±{threshold} norm): {f1:.3f}")
+
 
 
 
