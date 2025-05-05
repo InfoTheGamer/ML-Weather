@@ -174,8 +174,8 @@ if __name__ == "__main__":
     dataset_batch_download(
         start_time=datetime(2024, 6, 1, 0),
         end_time=datetime(2024, 11, 30, 23),
-        num_pairs=512,
+        num_pairs=12,
         area=[50, -125, 24, -67],
-        save_dir="512-data",
+        save_dir="32gb-dataset",
         max_threads=8
     )

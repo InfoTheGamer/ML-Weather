@@ -18,6 +18,7 @@ def plot_pair_with_cartopy(file_path):
 
         # Testing/debug
         print(np.amax(pressure_T))
+        print(ds.variables)
 
         pressure_T_plus_1 = ds.variables["pressure_T_plus_1"][:]  # Pressure at time t+1
 
@@ -64,7 +65,7 @@ def plot_pair_with_cartopy(file_path):
     print(np.amax(pressure_T_plus_1))
 
 # Test the plotting function with a specific file
-file_path = "512-data/pair_412.nc"  # Update this to your file path
+file_path = "32gb-test/pair_2024_07_01_00.nc"  # Update this to your file path
 plot_pair_with_cartopy(file_path)
 
 

@@ -9,15 +9,23 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import TensorDataset, DataLoader
+import glob
+from datetime import datetime, timedelta
+
 
 # --- Config ---
-DATA_DIR = "2048-data"
-NUM_SAMPLES = 2048
+DATA_DIR = "hurricanes-24"
+NUM_SAMPLES = len(os.listdir(DATA_DIR))
+#NUM_SAMPLES = 256
 TRAIN_SPLIT_PERCENT = 0.7
 TRAIN_SPLIT = int(TRAIN_SPLIT_PERCENT * NUM_SAMPLES)
 BATCH_SIZE = 64
 EPOCHS = 256
+LR = 1e-5
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+START_TIME = datetime(2024, 6, 1, 00) 
+TIME_STEP = timedelta(hours=1)  #Time Step Between Data pairs
+
 
 # --- Utility: Pad to divisible dimensions ---
 def pad_to_multiple(arr, divisor=8):
@@ -35,10 +43,20 @@ def unpad(arr, pads):
     pt, pb, pl, pr = pads
     return arr[..., pt:arr.shape[-2]-pb, pl:arr.shape[-1]-pr]
 
+# Denormalize Function
+def denormalize(data, min_val, max_val):
+    return data * (max_val - min_val) + min_val
+
+
 # --- Load + Preprocess Data ---
+# Get all matching pair_*.nc files
+pair_files = sorted(glob.glob(os.path.join(DATA_DIR, "pair_*.nc")))
+# Limit the number of samples if needed
+pair_files = pair_files[:NUM_SAMPLES]
+
 X, Y, pads = [], [], []
-for i in range(NUM_SAMPLES):
-    with nc.Dataset(os.path.join(DATA_DIR, f"pair_{i:03}.nc")) as ds:
+for i, file_path in enumerate(pair_files):
+    with nc.Dataset(file_path) as ds:
         var0 = ds.variables["pressure_T"][:]
         var1 = ds.variables["pressure_T_plus_1"][:]
 
@@ -75,7 +93,7 @@ pads_test = pads[TRAIN_SPLIT:]
 train_ds = TensorDataset(torch.tensor(X_train, dtype=torch.float32), torch.tensor(Y_train, dtype=torch.float32))
 test_ds = TensorDataset(torch.tensor(X_test, dtype=torch.float32), torch.tensor(Y_test, dtype=torch.float32))
 train_dl = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True)
-test_dl = DataLoader(test_ds, batch_size=BATCH_SIZE)
+test_dl = DataLoader(test_ds, batch_size=BATCH_SIZE, shuffle=True)
 
 # --- Define UNet Model ---
 class UNet(nn.Module):
@@ -134,11 +152,31 @@ class UNet(nn.Module):
         return self.final(d1)
 
 model = UNet().to(device)
-optimizer = torch.optim.Adam(model.parameters(), lr=1e-4, weight_decay=1e-5)
-criterion = nn.MSELoss()
+optimizer = torch.optim.Adam(model.parameters(), lr=LR, weight_decay=1e-6)
+def gradient_loss(pred, target):                        # Loss
+    def get_grad(img):
+        dx = img[:, :, :, 1:] - img[:, :, :, :-1]
+        dy = img[:, :, 1:, :] - img[:, :, :-1, :]
+        return dx, dy
+
+    dx_p, dy_p = get_grad(pred)
+    dx_t, dy_t = get_grad(target)
+    return F.l1_loss(dx_p, dx_t) + F.l1_loss(dy_p, dy_t)
+mse_loss = nn.MSELoss()
+def combined_loss(pred, target):
+    mse = mse_loss(pred, target)
+    grad = gradient_loss(pred, target)
+    return mse + 0.05 * grad  # tune the weight
+
+criterion = combined_loss
+
 
 # --- Training Loop ---
+train_losses = []
+test_losses = []
+
 for epoch in range(EPOCHS):
+    # --- Train ---
     model.train()
     running_loss = 0.0
     for xb, yb in train_dl:
@@ -149,7 +187,36 @@ for epoch in range(EPOCHS):
         loss.backward()
         optimizer.step()
         running_loss += loss.item()
-    print(f"Epoch {epoch+1}/{EPOCHS} - Loss: {running_loss/len(train_dl):.7f}")
+    avg_train_loss = running_loss / len(train_dl)
+    train_losses.append(avg_train_loss)
+
+    # --- Test Loss ---
+    model.eval()
+    test_loss = 0.0
+    with torch.no_grad():
+        for xb, yb in test_dl:
+            xb, yb = xb.to(device), yb.to(device)
+            preds = model(xb)
+            loss = criterion(preds, yb)
+            test_loss += loss.item()
+    avg_test_loss = test_loss / len(test_dl)
+    test_losses.append(avg_test_loss)
+
+    print(f"Epoch {epoch+1}/{EPOCHS} - Train Loss: {avg_train_loss:.7f} - Test Loss: {avg_test_loss:.7f}")
+
+# --- Plot losses ---
+plt.figure(figsize=(8, 5))
+plt.plot(train_losses, label='Train Loss')
+plt.plot(test_losses, label='Test Loss')
+plt.xlabel("Epoch")
+plt.ylabel("MSE+Gradient Loss")
+plt.title("Train vs Test Loss")
+plt.legend()
+plt.yscale("log")
+plt.grid(True, which='both', axis='x', linestyle='-', color='gray')  # Regular grid for x
+plt.grid(True, which='both', axis='y', linestyle='--', color='gray')  # Log grid for y
+plt.tight_layout()
+plt.show()
 
 # --- Predict ---
 model.eval()
@@ -207,11 +274,23 @@ print(f"Precision (±{threshold} norm): {precision:.3f}")
 print(f"Recall    (±{threshold} norm): {recall:.3f}")
 print(f"F1 Score  (±{threshold} norm): {f1:.3f}")
 
+# DENORMALIZED METRICS
+flat_true_denorm = denormalize(flat_true, min_val_X, max_val_X)
+flat_pred_denorm = denormalize(flat_pred, min_val_Y, max_val_Y)
+
+# Recalculate metrics on denormalized data
+mse_denorm = mean_squared_error(flat_true_denorm, flat_pred_denorm)
+mae_denorm = mean_absolute_error(flat_true_denorm, flat_pred_denorm)
+rmse_denorm = np.sqrt(mse_denorm)
+r2_denorm = r2_score(flat_true_denorm, flat_pred_denorm)
+
+print("\n📏 Denormalized Evaluation Metrics:")
+print(f"MSE: {mse_denorm:.4f}")
+print(f"MAE: {mae_denorm:.4f}")
+print(f"RMSE: {rmse_denorm:.4f}")
+print(f"R2: {r2_denorm:.4f}")
 
 # --- Visualization of Results ---
-def denormalize(data, min_val, max_val):
-    return data * (max_val - min_val) + min_val
-
 def visualize_example(example_idx, Y_test, Y_pred, lats, lons, min_val_Y, max_val_Y):
     """
     Plot ground truth, prediction, and absolute error using Cartopy.
@@ -224,6 +303,8 @@ def visualize_example(example_idx, Y_test, Y_pred, lats, lons, min_val_Y, max_va
     - lons: 2D array of shape (261, 581) with longitudes
     - min_val_Y, max_val_Y: for denormalizing output
     """
+    timestamp = START_TIME + example_idx * TIME_STEP
+    timestamp_str = timestamp.strftime('%Y-%m-%d %H:%M UTC')
 
     gt = Y_test[example_idx]
     pred = Y_pred[example_idx].squeeze()
@@ -241,16 +322,26 @@ def visualize_example(example_idx, Y_test, Y_pred, lats, lons, min_val_Y, max_va
     data_maps = [gt_denorm, pred_denorm, error_denorm]
     cmaps = ['viridis', 'viridis', 'Reds']
 
+    # Find common color scale range for GT and prediction
+    vmin = min(gt_denorm.min(), pred_denorm.min())
+    vmax = max(gt_denorm.max(), pred_denorm.max())
+
     for ax, title, data, cmap in zip(axs, titles, data_maps, cmaps):
         print("Data shape:", data.shape)
 
-        im = ax.pcolormesh(lons, lats, data, cmap=cmap, shading='auto')
+        # Use shared color scale for GT and prediction, and separate for error
+        if title in ['Ground Truth', 'Prediction']:
+            im = ax.pcolormesh(lons, lats, data, cmap=cmap, shading='auto', vmin=vmin, vmax=vmax)
+        else:
+            im = ax.pcolormesh(lons, lats, data, cmap=cmap, shading='auto')
+
         ax.add_feature(cfeature.COASTLINE)
         ax.add_feature(cfeature.BORDERS, linestyle=':')
         ax.add_feature(cfeature.STATES, linewidth=0.5)
         ax.set_title(title)
         fig.colorbar(im, ax=ax, orientation='vertical', shrink=0.7)
 
+    fig.suptitle(f"Weather Prediction Example - {timestamp_str}", fontsize=16)
     plt.tight_layout()
     plt.show()
 
@@ -260,6 +351,17 @@ print("lats: ", lat.shape)
 
 visualize_example(
     example_idx=10,
+    Y_test=Y_true_unpad,
+    Y_pred=Y_pred_unpad,
+    lats=lat,       # shape (261, 581)
+    lons=lon,       # shape (261, 581)
+    min_val_Y=min_val_Y,
+    max_val_Y=max_val_Y
+)
+
+# 2nd example visualization
+visualize_example(
+    example_idx=105,
     Y_test=Y_true_unpad,
     Y_pred=Y_pred_unpad,
     lats=lat,       # shape (261, 581)
