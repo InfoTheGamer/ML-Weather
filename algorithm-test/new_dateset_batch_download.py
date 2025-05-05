@@ -50,7 +50,6 @@ def download_and_extract_nc(client, dt, base_name, save_dir, area, dataset="rean
                 pressure = ds.variables["sp"][:]
                 lat = ds.variables["latitude"][:]
                 lon = ds.variables["longitude"][:]
-                print(lat,lon)
 
                 return times, pressure, lat, lon
         except Exception as e:
@@ -75,7 +74,6 @@ def download_pair(i,selectTimes, area, save_dir, dataset):
     print(f"📥 Starting {calendar.month_name[i]} ")
     try:
         times, p0, lat, lon = download_and_extract_nc(client, i, f"tmp0_{calendar.month_name[i]}", save_dir, area, dataset)
-        print(lat,lon)
         
         #_, p1, _, _ = download_and_extract_nc(client, [i,day,hourPlusOne], f"tmp1_{calendar.month_name[i+6]}_{day:02}", save_dir, area, dataset)
         for day,otherWordForTime in selectTimes[i-5].items():
